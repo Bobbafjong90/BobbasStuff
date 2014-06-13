@@ -1,0 +1,520 @@
+/*
+ Thanks to for doing parts of the code
+ Chase Cooley
+ Joey Meyer
+ Matt Falcon
+   Airsoft BOMB 
+   Mk 1.2.7 
+   THIS IS NOT A FINISHED CODE!!!
+   Writen by; Richard "Bobba" Larsen
+   */
+
+#include <Keypad.h>
+//#include <LiquidCrystal.h>
+#include <Wire.h>
+#include <Adafruit_MCP23017.h>
+#include <Adafruit_RGBLCDShield.h>
+
+Adafruit_RGBLCDShield lcd = Adafruit_RGBLCDShield();
+
+#define pound 14
+#define LED_RED 5
+#define LED_GREEN 6
+//#define KP_ROWS 3
+//#define KP_COLS 4
+#define RED 0x1
+#define YELLOW 0x3
+#define GREEN 0x2
+#define TEAL 0x6
+#define BLUE 0x4
+#define VIOLET 0x5
+#define WHITE 0x7
+
+unsigned int timerSeconds = 300; // start with 5 minutes on the clock
+
+byte password[4];  //sets memory for the code in byte
+byte entered[4];
+
+int currentLength = 0;
+int armKey = 2;          //defines some of the pins on the arduino for functions with buttons and stuff
+int disarmKey = 3;
+int missileKey = 4;
+int disarmAttempt = 3;
+int boombangPin = 13;
+
+boolean missileBool = false;  //booleans for sensing what mode that has armed the bomb
+boolean armBool = false;
+
+byte i = 0;         // custom characters for the loadbar
+
+byte p20[8] =
+{
+  B10000,
+  B10000,
+  B10000,
+  B10000,
+  B10000,
+  B10000,
+  B10000,
+};
+
+byte p40[8] = 
+{ 
+  B11000,
+  B11000,
+  B11000,
+  B11000,
+  B11000,
+  B11000,
+  B11000,
+};
+
+byte p60[8] =
+{
+  B11100,
+  B11100,
+  B11100,
+  B11100,
+  B11100,
+  B11100,
+  B11100, 
+};
+
+byte p80[8] =
+{
+  B11110,
+  B11110,
+  B11110,
+  B11110,
+  B11110,
+  B11110,
+  B11110, 
+};
+
+byte p100[8] =
+{
+  B11111,
+  B11111,
+  B11111,
+  B11111,
+  B11111,
+  B11111,
+  B11111, 
+};
+
+const byte KP_ROWS = 4; //four rows
+const byte KP_COLS = 3; //three columns
+
+//LiquidCrystal lcd(7, 8, 10, 11, 12, 13);
+
+//Keypad
+char keys[KP_ROWS][KP_COLS] = {
+  {
+    '1','2','3'                                                        }
+  ,
+  {
+    '4','5','6'                                                        }
+  ,
+  {
+    '7','8','9'                                                        }
+  ,
+  {
+    '*','0','#'                                                        }
+};
+byte rowPins[KP_ROWS] = 
+{
+  8,9,10,11}; //connect to the row pinouts of the keypad {18, 2, 14, 16}
+byte colPins[KP_COLS] = 
+{
+  5,6,7}; //connect to the column pinouts of the keypad {17, 19, 15}
+Keypad keypad = Keypad(makeKeymap(keys), rowPins, colPins, KP_ROWS, KP_COLS);
+
+char key;
+
+//LCD setup
+void setup() 
+{
+
+  pinMode(LED_RED, OUTPUT); // sets the digital pin as output
+  pinMode(LED_GREEN, OUTPUT); // sets the digital pin as output
+  pinMode(boombangPin, OUTPUT);
+  lcd.begin(16, 2);
+  lcd.setBacklight(BLUE);
+  lcd.print(" Set Your Code: ");
+  //  lcd.cursor();
+  lcd.setCursor(6, 1);
+  while (currentLength < 4) {
+    key = keypad.getKey();
+    if (key != NO_KEY) {
+      lcd.print(key);
+      password[currentLength] = key;
+      currentLength++;
+      lcd.setCursor(currentLength + 6, 1);
+    } 
+    else delay(100); // only sample it every 1/10 sec, no need to go apesh!t
+  }
+  /*  lcd.noCursor();
+   lcd.clear();
+   lcd.print("You've Entered: ");
+   lcd.setCursor(6, 1);
+   lcd.print(password[0],DEC);
+   lcd.print(password[1],DEC);
+   lcd.print(password[2],DEC);
+   lcd.print(password[3],DEC);
+   delay(2500); */
+  lcd.setCursor(0,0);
+  lcd.print("You've Entered: ");
+  delay(2500);
+  lcd.clear();
+  currentLength = 0;
+
+  lcd.createChar(0, p20);
+  lcd.createChar(1, p40);
+  lcd.createChar(2, p60);
+  lcd.createChar(3, p80);
+  lcd.createChar(4, p100);
+
+}
+
+void loop() 
+{
+  uint8_t buttons = lcd.readButtons();
+
+  /*--------
+   |Set time|
+   --------*/
+
+  if (armBool == false)
+  {
+    if (missileBool == false)
+    {
+      lcd.setCursor(0,0);
+      lcd.print("Set Time");
+      lcd.setBacklight(BLUE);
+      printTime();
+      if (buttons)
+      {
+        if (buttons & BUTTON_SELECT)
+        {
+          if (buttons & BUTTON_UP)
+          {
+            timerSeconds = timerSeconds + 3600;
+            delay(100);
+            printTime();
+          } 
+        }
+        if (buttons & BUTTON_LEFT)
+        {
+          if (buttons & BUTTON_UP)
+          {
+            timerSeconds = timerSeconds + 60; 
+            delay(100);
+            printTime();
+          }
+        }
+        if (buttons & BUTTON_LEFT)
+        {
+          if (buttons & BUTTON_DOWN)
+          {
+            timerSeconds = timerSeconds - 60; 
+            delay(100);
+            printTime();
+          }
+        }
+        if (buttons & BUTTON_RIGHT)
+        {
+          if (buttons & BUTTON_UP)
+          {
+            timerSeconds = timerSeconds ++;
+            delay(100);
+            printTime();
+          }
+        }
+        if (buttons & BUTTON_RIGHT)
+        {
+          if (buttons & BUTTON_DOWN)
+          {
+            timerSeconds = timerSeconds --; 
+            delay(100);
+            printTime();
+          }
+        } 
+      }
+    }
+  }
+
+
+
+
+
+  if (digitalRead(missileKey) == HIGH)
+  { 
+    missileBool = true;
+    if (digitalRead(missileKey) == LOW)
+    {
+      missileBool = true; 
+    }
+  }
+  if (missileBool == true)
+  {
+    // lcd.clear();
+    lcd.setBacklight(RED);
+    lcd.setCursor(0,0);
+    lcd.print("Status = Armed  ");
+    // lcd.cursor();
+    key = keypad.getKey(); // get the key once per this loop
+    if (key != NO_KEY) {
+      lcd.setCursor(0, 1);
+      lcd.print("               ");
+      lcd.setCursor(6, 1);
+      while (currentLength < 4) {
+        // here, we take the key that broke us into this "if" statement, instead of discarding it. this also pauses the timer, effectively.
+        if (key != NO_KEY) { // redundant for the first loop, but necessary for every next character
+          //  lcd.clear();
+          lcd.setBacklight(YELLOW);
+          lcd.setCursor(0,0);
+          lcd.print("   Enter Code:  ");
+          lcd.setCursor(currentLength + 5, 1);
+          lcd.print("*");
+          //     lcd.setCursor(currentLength + 6, 1);
+          //     lcd.print(key);
+          entered[currentLength] = key;
+          currentLength++;
+        } 
+        else delay(100); // only sample it every 1/10 sec
+        key = keypad.getKey(); // get the key every time "while" loops
+      }
+      if (memcmp(entered,password,4) == 0)     // shortcut to compare an array of bytes, use memcmp(A, B, length), will return 0 if match.
+      { 
+        delay(750);
+        lcd.clear();
+        lcd.setCursor(0,0);
+        lcd.print(" Verifying Code ");
+        lcd.setCursor(0,1);
+        lcd.print("                ");
+        for (int i = 0; i<16; i++)
+        {
+          for (int j = 0; j<5; j++)
+          {
+            lcd.setCursor(i,1);
+            lcd.write(j);
+            delay(100);
+          } 
+        }
+        lcd.clear();
+        lcd.setBacklight(GREEN);
+        lcd.print("   Woop Woop!   ");
+        lcd.setCursor(0,1);
+        lcd.print("Bomb Is Disarmed");
+        delay(5000);
+        lcd.clear();
+        lcd.setCursor(0,0);
+        lcd.print(" Bomb have been ");
+        lcd.setCursor(0,1);
+        lcd.print(" disarmed by KP ");
+        delay(10000000);
+      } 
+      else 
+      {
+        delay(750);
+        lcd.clear();
+        lcd.setCursor(0,0);
+        lcd.print(" Verifying Code ");
+        lcd.setCursor(0,1);
+        lcd.print("                ");
+        for (int i = 0; i<16; i++)
+        {
+          for (int j = 0; j<5; j++)
+          {
+            lcd.setCursor(i,1);
+            lcd.write(j);
+            delay(100);
+          } 
+        }
+        disarmAttempt = disarmAttempt --;
+        if (disarmAttempt > 0)
+        {
+          lcd.setBacklight(RED);
+          lcd.noCursor();
+          lcd.clear();
+          lcd.print(" Wrong Code! ");
+          lcd.setCursor(0, 1);
+          lcd.print("Time penalty 50%"); // Display time penalty
+          delay(2500);
+          lcd.clear();
+          lcd.print(" You have now ");
+          lcd.print(disarmAttempt);
+          lcd.print(" ");
+          lcd.setCursor(0,1);
+          lcd.print(" attempts left ");
+          timerSeconds = timerSeconds / 2;
+          //if (timerSeconds > 30) timerSeconds -= 30;
+          //else timerSeconds = 1; // will trigger BOOM next cycle
+          currentLength = 0;
+          delay(2500); // hold that on screen for 2.5 seconds
+          lcd.setCursor(0,1);
+          lcd.print("Status = Armed  ");
+        }
+        else
+        {
+          bombomb(); 
+        }
+      }
+    }
+  }
+  timer(); // prints current time on screen, checks for "go off" time, holds loop for 1 second
+
+  if (digitalRead(armKey) == HIGH)
+  { 
+    armBool = true;
+    if (digitalRead(armKey) == LOW)
+    {
+      armBool = true; 
+    }
+  }
+  if (armBool == true)
+  {
+    // lcd.clear();
+    lcd.setCursor(0,0);
+    lcd.print("Status = Armed");
+    lcd.setBacklight(RED); 
+    if (digitalRead(disarmKey) == HIGH)
+    {
+      lcd.clear();
+      lcd.setBacklight(GREEN);
+      lcd.print("   Woop Woop!   ");
+      lcd.setCursor(0,1);
+      lcd.print("Bomb Is Disarmed");
+      delay(5000);
+      lcd.clear();
+      lcd.setCursor(0,0);
+      lcd.print(" Bomb have been ");
+      lcd.setCursor(0,1);
+      lcd.print(" disarmed by KS ");
+      delay(10000000);
+    } 
+  }
+  timer();
+}
+
+void timer() 
+{
+  if (missileBool == true)
+  {
+    lcd.setCursor(0, 1); // sets cursor to 2nd line
+    lcd.print(timerSeconds / 60); // integer number of minutes on clock
+    lcd.print("Min : ");
+    lcd.print(timerSeconds % 60); // mod 60; gives us number of seconds outside of 60sec/min
+    lcd.print("Sec     ");
+    delay(950); // hold us here for 0.950 seconds
+    digitalWrite(LED_GREEN,!digitalRead(LED_GREEN)); // toggle the green LED once a second
+    //  tone(9,784, 200); // play bleep for 50ms
+    delay(50); // and there's the rest of that 1 second (not counting LCD delay)
+
+    timerSeconds--;
+    if (timerSeconds == 0) bombomb();
+  }
+  if (armBool == true)
+  {
+    lcd.setCursor(0, 1); // sets cursor to 2nd line
+    lcd.print(timerSeconds / 60); // integer number of minutes on clock
+    lcd.print("Min : ");
+    lcd.print(timerSeconds % 60); // mod 60; gives us number of seconds outside of 60sec/min
+    lcd.print("Sec     ");
+    delay(950); // hold us here for 0.950 seconds
+    digitalWrite(LED_GREEN,!digitalRead(LED_GREEN)); // toggle the green LED once a second
+    //  tone(9,784, 200); // play bleep for 50ms
+    delay(50); // and there's the rest of that 1 second (not counting LCD delay)
+
+    timerSeconds--;
+    if (timerSeconds == 0) bombomb();
+  }
+}
+
+void printTime()
+{ 
+  lcd.setCursor(0, 1); // sets cursor to 2nd line
+  lcd.print(timerSeconds / 60); // integer number of minutes on clock
+  lcd.print("Min : ");
+  lcd.print(timerSeconds % 60); // mod 60; gives us number of seconds outside of 60sec/min
+  lcd.print("Sec     ");
+}
+void bombomb()  // routine for making ze BOMB GOEZ OFF!!!1 :D
+{
+  lcd.noCursor();
+  lcd.clear();
+  digitalWrite(boombangPin,HIGH);
+  lcd.print(" !BoOo0o0o0om! ");
+  lcd.setCursor(0,1);
+  lcd.print("You Got Smacked!");
+  delay(3000);
+  digitalWrite(boombangPin, LOW);
+  lcd.setCursor(0,0);
+  lcd.print("  In Your Face  ");
+  lcd.setCursor(0,1);
+  lcd.print("   Beeaatch!!   ");
+  
+
+ 
+ 
+ 
+ 
+ 
+  tone(9,110, 200);
+  digitalWrite(LED_RED, HIGH); // sets the red LED on
+  delay(500); // waits half a second
+  tone(9,110, 200);
+  delay(500); // waits half a second
+  digitalWrite(LED_RED, LOW); // sets the red LED off
+  digitalWrite(LED_GREEN, HIGH); // sets the green LED on
+  tone(9,110, 200);
+  delay(500); // waits half a second
+  digitalWrite(LED_RED, HIGH); // sets the red LED on
+  digitalWrite(LED_GREEN, LOW); // sets the green LED off
+  tone(9,110, 200);
+  delay(500); // waits half a second
+  digitalWrite(LED_RED, LOW); // sets the red LED off
+  digitalWrite(LED_GREEN, HIGH); // sets the green LED on
+  tone(9,110, 200);
+  delay(500); // waits half a second
+  digitalWrite(LED_GREEN, LOW); // sets the green LED off
+  key = NO_KEY; // enter the while() loop, otherwise it'll skip. i could use do { } while();, but I'm lazy.
+  while (key == NO_KEY) {
+    key = keypad.getKey();
+    if (key == '#') {
+      lcd.clear();
+      lcd.print("Reset the Bomb");
+      delay(2500); // good ole' 2.5 sec delay
+      timerSeconds = 300; // put 5 minutes on the clock
+      // and we break the loop and go back to timer.
+    } 
+    else key = NO_KEY; // continue looking for pound key
+  }
+}   
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
